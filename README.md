@@ -1,4 +1,4 @@
-# Gatherly — AI Coding Workshop Product
+# Gatherly — AI Coding Workshop Product 
 
 Gatherly is a realistic conference-management product. Attendees discover and register for conferences, then build a personal agenda. Organizers manage programs and capacity, speakers see their sessions, and administrators govern platform access.
 
