@@ -242,6 +242,9 @@ conferencesRouter.post("/:id/status", (req, res) => {
 });
 
 conferencesRouter.post("/:id/register", authorize("ATTENDEE"), (req, res) => {
+  if (!req.user!.isVerified) {
+    return res.status(403).json({ message: "Email must be verified to register", code: "EMAIL_NOT_VERIFIED" });
+  }
   const conference = store.findConference(+req.params.id);
   if (!conference) {
     return res.status(404).json({ message: "Conference not found", code: "NOT_FOUND" });

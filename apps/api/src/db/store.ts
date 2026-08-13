@@ -487,14 +487,14 @@ export const store = {
   updateConferenceStatus(id: number, status: "CANCELLED" | "COMPLETED"): Conference {
     const conference = this.findConference(id);
     if (!conference) throw new Error("NOT_FOUND");
-    const allowed = {
+    const allowed: Record<string, readonly string[]> = {
       DRAFT: ["CANCELLED"],
       PUBLISHED: ["CANCELLED", "COMPLETED"],
       CANCELLED: [],
       COMPLETED: [],
       SOLD_OUT: [],
-    } as const;
-    if (!allowed[conference.status as keyof typeof allowed]?.includes(status)) {
+    };
+    if (!allowed[conference.status]?.includes(status)) {
       throw Object.assign(new Error("INVALID_STATUS_TRANSITION"), { code: "INVALID_STATUS_TRANSITION" });
     }
     if (status === "COMPLETED") {
