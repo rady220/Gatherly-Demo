@@ -93,3 +93,66 @@ Read [Product Spec](docs/PRODUCT-SPEC.md), [Architecture](docs/ARCHITECTURE.md).
 ## Security boundary
 
 Route guards improve UX but are not trusted security. Every protected operation is authorized again in the API. Demo secrets and localStorage tokens are workshop conveniences; production hardening is explicitly part of the backlog.
+
+## Ralph — Automated Story Implementation
+
+Ralph is an iterative development agent that implements user stories from `.claude/stories/` using Claude Code. It processes stories one at a time, runs tests, fixes failures, and moves on — enforcing a 5-iteration maximum per story.
+
+### Usage
+
+```bash
+./ralph.sh
+```
+
+> **Windows users:** Run with Git Bash or WSL (`bash ralph.sh`).
+
+### Story Selection
+
+Ralph will display all available stories and prompt you to select:
+
+```
+Available stories:
+
+  1. US-1.1-create-attendee-account.md
+  2. US-1.2-verify-email-address.md
+  3. US-1.3-reset-change-password.md
+  ...
+
+Which stories do you want to implement?
+Enter story numbers, IDs, or "all":
+```
+
+Selection formats:
+
+| Format | Example |
+|--------|---------|
+| By number | `1,2,3` |
+| By story ID | `US-1.1,US-1.2` |
+| By range | `From US-1.1 To US-1.4` |
+| All stories | `all` |
+
+### How It Works
+
+For each selected story, Ralph will:
+
+1. Read the story and its acceptance criteria
+2. Consult `.claude/agents/` and `.claude/skills/` for conventions
+3. Implement the story
+4. Run the relevant tests
+5. If tests fail — analyze, fix, and retry (up to 5 iterations)
+6. Move to the next story once complete or after 5 failed attempts
+
+### Requirements
+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and available in PATH
+- Bash shell (Git Bash or WSL on Windows)
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `ralph.sh` | Executable script — story selection and iteration loop |
+| `.claude/ralph.md` | Detailed agent instructions for the Ralph workflow |
+| `.claude/stories/` | User story files (input) |
+| `.claude/agents/` | Agent role definitions |
+| `.claude/skills/` | Implementation pattern guides |
