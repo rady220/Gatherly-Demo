@@ -2,8 +2,9 @@ import { Component, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { PasswordInputComponent } from '../../shared/password-input.component';
 @Component({
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PasswordInputComponent],
   template: `<main class="auth-page">
     <section class="auth-story">
       <a class="brand"><span class="brand-mark">G</span>Gatherly</a>
@@ -25,8 +26,10 @@ import { AuthService } from '../../core/auth/auth.service';
         <span class="eyebrow">Welcome</span>
         <h2>Sign in to Gatherly</h2>
         <p>Explore the product through any workshop role.</p>
-        <label>Email<input formControlName="email" type="email" /></label
-        ><label>Password<input formControlName="password" type="password" /></label>
+        <label>Email<input formControlName="email" type="email" /></label>
+        <label>Password
+          <app-password-input [control]="form.controls.password" />
+        </label>
         @if (error()) {
           <div class="alert">{{ error() }}</div>
         }
@@ -41,6 +44,7 @@ import { AuthService } from '../../core/auth/auth.service';
         </div>
         <small>All demo passwords: <code>Workshop123!</code></small>
         <p class="auth-switch">Don't have an account? <a routerLink="/register">Create one</a></p>
+        <p class="auth-switch"><a routerLink="/forgot-password">Forgot your password?</a></p>
       </form>
     </section>
   </main>`,

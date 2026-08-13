@@ -110,3 +110,68 @@ authRouter.post("/refresh", (req, res) => {
   }
 });
 authRouter.get("/me", authenticate, (req, res) => res.json(req.user));
+
+// US-1.3: Forgot password — always returns 200 (no email enumeration)
+authRouter.post("/forgot-password", (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== "string")
+    return res.status(400).json({ message: "Email is required", code: "INVALID_INPUT" });
+
+  const user = store.findUserByEmail(email);
+  if (user) {
+    store.invalidatePasswordResetTokens(user.id);
+    const resetToken = store.createPasswordResetToken(user.id);
+    // In production this would be emailed; for demo we return it
+    return res.json({ message: "If that email exists, a reset link has been sent.", resetToken });
+  }
+  // Always return 200 to prevent email enumeration
+  res.json({ message: "If that email exists, a reset link has been sent." });
+});
+
+// US-1.3: Reset password with token
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+authRouter.post("/reset-password", (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success)
+    return res.status(400).json({ message: "Validation failed", code: "VALIDATION_ERROR", errors: parsed.error.issues.map(i => ({ field: i.path[0], message: i.message })) });
+
+  const result = store.validatePasswordResetToken(parsed.data.token);
+  if (!result.success) {
+    const message =
+      result.error === "TOKEN_EXPIRED" ? "Reset token has expired" :
+      result.error === "TOKEN_ALREADY_USED" ? "Reset token has already been used" :
+      "Invalid reset token";
+    return res.status(400).json({ message, code: result.error });
+  }
+
+  const passwordHash = bcrypt.hashSync(parsed.data.newPassword, 10);
+  store.updatePassword(result.userId!, passwordHash);
+  store.usePasswordResetToken(parsed.data.token);
+  res.json({ message: "Password has been reset successfully" });
+});
+
+// US-1.3: Change password (authenticated)
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+});
+
+authRouter.post("/change-password", authenticate, (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success)
+    return res.status(400).json({ message: "Validation failed", code: "VALIDATION_ERROR", errors: parsed.error.issues.map(i => ({ field: i.path[0], message: i.message })) });
+
+  const user = store.findUserByEmail(req.user!.email);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  if (!bcrypt.compareSync(parsed.data.currentPassword, user.passwordHash))
+    return res.status(401).json({ message: "Current password is incorrect", code: "WRONG_PASSWORD" });
+
+  const passwordHash = bcrypt.hashSync(parsed.data.newPassword, 10);
+  store.updatePassword(user.id, passwordHash);
+  res.json({ message: "Password changed successfully" });
+});

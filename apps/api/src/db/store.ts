@@ -22,6 +22,7 @@ const db = new DatabaseSync(path);
 db.exec(`PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,avatar TEXT,active INTEGER,is_verified INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS verification_tokens(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),token TEXT UNIQUE,expires_at TEXT,used INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS password_reset_tokens(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),token TEXT UNIQUE,expires_at TEXT,used INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS conferences(id INTEGER PRIMARY KEY,title TEXT,slug TEXT UNIQUE,summary TEXT,venue TEXT,city TEXT,starts_at TEXT,ends_at TEXT,status TEXT DEFAULT 'DRAFT',capacity INTEGER,organizer_id INTEGER,theme TEXT);
 CREATE TABLE IF NOT EXISTS sessions(id INTEGER PRIMARY KEY,conference_id INTEGER REFERENCES conferences(id),title TEXT,abstract TEXT,track TEXT,room TEXT,starts_at TEXT,ends_at TEXT,capacity INTEGER,speaker_id INTEGER,status TEXT DEFAULT 'SCHEDULED');
 CREATE TABLE IF NOT EXISTS registrations(conference_id INTEGER,user_id INTEGER,status TEXT DEFAULT 'CONFIRMED',PRIMARY KEY(conference_id,user_id));
@@ -373,5 +374,27 @@ export const store = {
       "INSERT INTO conferences(title,slug,summary,venue,city,starts_at,ends_at,status,capacity,organizer_id,theme) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
     ).run(data.title, slug, data.summary, data.venue, data.city, data.startsAt, data.endsAt, data.status, data.capacity, organizerId, theme);
     return mapConference(db.prepare("SELECT * FROM conferences WHERE id=?").get(result.lastInsertRowid));
+  },
+  createPasswordResetToken(userId: number): string {
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    db.prepare("INSERT INTO password_reset_tokens(user_id,token,expires_at) VALUES(?,?,?)").run(userId, token, expiresAt);
+    return token;
+  },
+  validatePasswordResetToken(token: string): { success: boolean; userId?: number; error?: string } {
+    const row = db.prepare("SELECT * FROM password_reset_tokens WHERE token=?").get(token) as any;
+    if (!row) return { success: false, error: "INVALID_TOKEN" };
+    if (row.used) return { success: false, error: "TOKEN_ALREADY_USED" };
+    if (new Date(row.expires_at) < new Date()) return { success: false, error: "TOKEN_EXPIRED" };
+    return { success: true, userId: row.user_id };
+  },
+  usePasswordResetToken(token: string): void {
+    db.prepare("UPDATE password_reset_tokens SET used=1 WHERE token=?").run(token);
+  },
+  updatePassword(userId: number, passwordHash: string): void {
+    db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(passwordHash, userId);
+  },
+  invalidatePasswordResetTokens(userId: number): void {
+    db.prepare("UPDATE password_reset_tokens SET used=1 WHERE user_id=? AND used=0").run(userId);
   },
 };

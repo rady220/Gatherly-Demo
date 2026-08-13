@@ -521,3 +521,163 @@ describe("US-2.1 — create conference", () => {
     expect(duplicate.body.code).toBe("SLUG_CONFLICT");
   });
 });
+
+/* ────────────────── US-1.3: Reset or Change Password ────────────────── */
+describe("US-1.3 — reset or change password", () => {
+  let counter = 0;
+  const registerUser = async () => {
+    counter++;
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({ name: `PwUser ${counter}`, email: `pwuser${counter}@test.com`, password: "Workshop123!" });
+    return res.body;
+  };
+
+  // --- Forgot password ---
+  it("forgot-password returns 200 for existing email and includes reset token", async () => {
+    const res = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain("reset link");
+    expect(res.body.resetToken).toBeDefined();
+  });
+
+  it("forgot-password returns 200 for non-existing email (no enumeration)", async () => {
+    const res = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "nonexistent@example.com" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain("reset link");
+    expect(res.body.resetToken).toBeUndefined();
+  });
+
+  it("forgot-password returns 400 when email is missing", async () => {
+    const res = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("INVALID_INPUT");
+  });
+
+  // --- Reset password ---
+  it("reset-password successfully resets password with valid token", async () => {
+    const forgot = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" });
+    const resetToken = forgot.body.resetToken;
+
+    const res = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: resetToken, newPassword: "NewPassword123!" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain("reset successfully");
+
+    // Can now login with new password
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "attendee@gatherly.dev", password: "NewPassword123!" });
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.accessToken).toBeDefined();
+
+    // Restore original password for other tests
+    await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" })
+      .then(async (r) => {
+        await request(app)
+          .post("/api/auth/reset-password")
+          .send({ token: r.body.resetToken, newPassword: "Workshop123!" });
+      });
+  });
+
+  it("reset-password returns 400 for already-used token", async () => {
+    const forgot = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" });
+    const resetToken = forgot.body.resetToken;
+
+    // Use token once
+    await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: resetToken, newPassword: "TempPass123!" });
+
+    // Try to use same token again
+    const res = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: resetToken, newPassword: "AnotherPass123!" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("TOKEN_ALREADY_USED");
+
+    // Restore original password
+    const forgot2 = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" });
+    await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: forgot2.body.resetToken, newPassword: "Workshop123!" });
+  });
+
+  it("reset-password returns 400 for invalid token", async () => {
+    const res = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: "invalid-token-uuid", newPassword: "NewPass123!" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("INVALID_TOKEN");
+  });
+
+  it("reset-password returns 400 when newPassword is too short", async () => {
+    const forgot = await request(app)
+      .post("/api/auth/forgot-password")
+      .send({ email: "attendee@gatherly.dev" });
+    const res = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: forgot.body.resetToken, newPassword: "short" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  // --- Change password (authenticated) ---
+  it("change-password succeeds with correct current password", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/auth/change-password")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ currentPassword: "Workshop123!", newPassword: "Changed456!" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain("changed successfully");
+
+    // Can now login with new password
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email: body.user.email, password: "Changed456!" });
+    expect(loginRes.status).toBe(200);
+  });
+
+  it("change-password returns 401 for wrong current password", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/auth/change-password")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ currentPassword: "WrongPassword!", newPassword: "Changed456!" });
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("WRONG_PASSWORD");
+  });
+
+  it("change-password returns 400 when new password is too short", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/auth/change-password")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ currentPassword: "Workshop123!", newPassword: "short" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("change-password requires authentication", async () => {
+    const res = await request(app)
+      .post("/api/auth/change-password")
+      .send({ currentPassword: "Workshop123!", newPassword: "Changed456!" });
+    expect(res.status).toBe(401);
+  });
+});

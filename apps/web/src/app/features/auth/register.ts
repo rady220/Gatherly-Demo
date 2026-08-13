@@ -2,9 +2,10 @@ import { Component, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { PasswordInputComponent } from '../../shared/password-input.component';
 
 @Component({
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PasswordInputComponent],
   template: `<main class="auth-page">
     <section class="auth-story">
       <a class="brand"><span class="brand-mark">G</span>Gatherly</a>
@@ -28,7 +29,9 @@ import { AuthService } from '../../core/auth/auth.service';
         <p>Sign up as an attendee to explore conferences.</p>
         <label>Name<input formControlName="name" type="text" placeholder="Your full name" /></label>
         <label>Email<input formControlName="email" type="email" placeholder="you@example.com" /></label>
-        <label>Password<input formControlName="password" type="password" placeholder="Min. 8 characters" /></label>
+        <label>Password
+          <app-password-input [control]="form.controls.password" placeholder="Min. 8 characters" />
+        </label>
         @if (error()) {
           <div class="alert">{{ error() }}</div>
         }
