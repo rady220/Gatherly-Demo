@@ -334,6 +334,13 @@ export const store = {
   isRegistered(conferenceId: number, userId: number): boolean {
     return !!db.prepare("SELECT 1 FROM registrations WHERE conference_id=? AND user_id=?").get(conferenceId, userId);
   },
+  createUser(data: { name: string; email: string; passwordHash: string; role: Role }): User {
+    const avatar = data.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+    const result = db.prepare(
+      "INSERT INTO users(name,email,password_hash,role,avatar,active) VALUES(?,?,?,?,?,1)"
+    ).run(data.name, data.email, data.passwordHash, data.role, avatar);
+    return safe(db.prepare("SELECT * FROM users WHERE id=?").get(result.lastInsertRowid));
+  },
   createConference(data: { title: string; summary: string; startsAt: string; endsAt: string; city: string; venue: string; capacity: number; status: "DRAFT" | "PUBLISHED" }, organizerId: number): Conference {
     const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const theme = "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");

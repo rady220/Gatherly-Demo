@@ -47,6 +47,76 @@ describe("conference security and workflow", () => {
   });
 });
 
+/* ────────────────── US-1.1: Create Attendee Account ────────────────── */
+describe("US-1.1 — create attendee account", () => {
+  const validUser = (overrides: Record<string, unknown> = {}) => ({
+    name: "Test User",
+    email: `test-${Date.now()}@example.com`,
+    password: "SecurePass123!",
+    ...overrides,
+  });
+
+  it("registers a new attendee and returns tokens + profile", async () => {
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send(validUser({ email: "newuser@example.com" }));
+    expect(res.status).toBe(201);
+    expect(res.body.accessToken).toBeDefined();
+    expect(res.body.refreshToken).toBeDefined();
+    expect(res.body.user).toBeDefined();
+    expect(res.body.user.role).toBe("ATTENDEE");
+    expect(res.body.user.email).toBe("newuser@example.com");
+    expect(res.body.user.name).toBe("Test User");
+    expect(res.body.user.passwordHash).toBeUndefined();
+  });
+
+  it("returns 400 when email is missing @", async () => {
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send(validUser({ email: "notanemail" }));
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toBeDefined();
+  });
+
+  it("returns 400 when password is too short", async () => {
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send(validUser({ password: "short" }));
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toBeDefined();
+  });
+
+  it("returns 400 when name is missing", async () => {
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({ email: "valid@example.com", password: "LongEnough1!" });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 409 for duplicate email (case-insensitive)", async () => {
+    const email = `duplicate-${Date.now()}@example.com`;
+    await request(app).post("/api/auth/register").send(validUser({ email }));
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send(validUser({ email: email.toUpperCase() }));
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("EMAIL_EXISTS");
+  });
+
+  it("hashes the password (can login with it)", async () => {
+    const email = `hash-test-${Date.now()}@example.com`;
+    const password = "MySecurePass99!";
+    await request(app)
+      .post("/api/auth/register")
+      .send(validUser({ email, password }));
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email, password });
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.accessToken).toBeDefined();
+  });
+});
+
 /* ────────────────── US-5.1: Room Conflict Detection ────────────────── */
 describe("US-5.1 — room conflict detection", () => {
   const validSession = (overrides: Record<string, unknown> = {}) => ({

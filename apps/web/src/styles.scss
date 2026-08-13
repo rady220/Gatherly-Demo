@@ -716,6 +716,23 @@ th {
   padding: .5rem
 }
 
+.auth-switch {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: .85rem;
+  color: var(--muted, #666)
+}
+
+.auth-switch a {
+  color: var(--accent, #6d5dfc);
+  font-weight: 600;
+  text-decoration: none
+}
+
+.auth-switch a:hover {
+  text-decoration: underline
+}
+
 .empty {
   grid-column: 1/-1;
   text-align: center;

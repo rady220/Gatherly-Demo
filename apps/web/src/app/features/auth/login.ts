@@ -1,9 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 @Component({
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   template: `<main class="auth-page">
     <section class="auth-story">
       <a class="brand"><span class="brand-mark">G</span>Gatherly</a>
@@ -40,6 +40,7 @@ import { AuthService } from '../../core/auth/auth.service';
           ><button type="button" (click)="fill('attendee')">Attendee</button>
         </div>
         <small>All demo passwords: <code>Workshop123!</code></small>
+        <p class="auth-switch">Don't have an account? <a routerLink="/register">Create one</a></p>
       </form>
     </section>
   </main>`,

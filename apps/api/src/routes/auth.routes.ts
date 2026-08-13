@@ -6,6 +6,41 @@ import { tokens } from "../auth/tokens.js";
 import { authenticate } from "../middleware/auth.js";
 export const authRouter = Router();
 const login = z.object({ email: z.email(), password: z.string().min(8) });
+
+const register = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().refine((v) => v.includes("@"), { message: "Invalid email format" }),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+authRouter.post("/register", (req, res) => {
+  const parsed = register.safeParse(req.body);
+  if (!parsed.success)
+    return res
+      .status(400)
+      .json({
+        message: "Validation failed",
+        errors: parsed.error.issues.map((i) => ({ field: i.path[0], message: i.message })),
+      });
+
+  const existing = store.findUserByEmail(parsed.data.email);
+  if (existing)
+    return res
+      .status(409)
+      .json({ message: "Email already registered", code: "EMAIL_EXISTS" });
+
+  const passwordHash = bcrypt.hashSync(parsed.data.password, 10);
+  const user = store.createUser({
+    name: parsed.data.name,
+    email: parsed.data.email,
+    passwordHash,
+    role: "ATTENDEE",
+  });
+
+  const { passwordHash: _, ...safeUser } = user;
+  res.status(201).json({ ...tokens.issue(user), user: safeUser });
+});
+
 authRouter.post("/login", (req, res) => {
   const parsed = login.safeParse(req.body);
   if (!parsed.success)

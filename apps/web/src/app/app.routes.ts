@@ -3,6 +3,7 @@ import { authGuard, roleGuard } from './core/guards/auth.guard';
 import { Shell } from './layout/shell';
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/auth/login').then((m) => m.Login) },
+  { path: 'register', loadComponent: () => import('./features/auth/register').then((m) => m.Register) },
   {
     path: 'forbidden',
     loadComponent: () => import('./features/forbidden/forbidden').then((m) => m.Forbidden),
