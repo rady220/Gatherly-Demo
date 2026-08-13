@@ -3,7 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { Session } from '../../core/models/models';
 
-interface Filters { search: string; track: string; room: string; day: string; }
+interface Filters { q: string; speaker: string; track: string; room: string; day: string; }
 
 @Component({
   standalone: true,
@@ -18,9 +18,15 @@ interface Filters { search: string; track: string; room: string; day: string; }
     <div class="filter-bar">
       <input
         type="text"
-        placeholder="Search sessions…"
-        [value]="filters().search"
-        (input)="updateFilter('search', $any($event.target).value)"
+        placeholder="Speaker"
+        [value]="filters().speaker"
+        (input)="updateFilter('speaker', $any($event.target).value)"
+      />
+      <input
+        type="text"
+        placeholder="Keyword search"
+        [value]="filters().q"
+        (input)="updateFilter('q', $any($event.target).value)"
       />
       <select [value]="filters().track" (change)="updateFilter('track', $any($event.target).value)">
         <option value="">All tracks</option>
@@ -106,13 +112,14 @@ export class ScheduleBrowser implements OnInit {
   loading = signal(false);
   tracks = signal<string[]>([]);
   rooms = signal<string[]>([]);
-  filters = signal<Filters>({ search: '', track: '', room: '', day: '' });
+  filters = signal<Filters>({ q: '', speaker: '', track: '', room: '', day: '' });
 
   ngOnInit() {
     this.conferenceId = this.route.snapshot.paramMap.get('id')!;
     const qp = this.route.snapshot.queryParams;
     this.filters.set({
-      search: qp['search'] || '',
+      q: qp['q'] || '',
+      speaker: qp['speaker'] || '',
       track: qp['track'] || '',
       room: qp['room'] || '',
       day: qp['day'] || '',
@@ -120,16 +127,17 @@ export class ScheduleBrowser implements OnInit {
     this.fetchSessions();
   }
 
-  updateFilter(key: string, value: string) {
+  updateFilter(key: keyof Filters, value: string) {
     this.filters.update((f) => ({ ...f, [key]: value }));
-    this.router.navigate([], { queryParams: { ...this.filters() }, queryParamsHandling: 'merge' });
+    const next = { ...this.filters() };
+    this.router.navigate([], { queryParams: next, queryParamsHandling: 'merge' });
     this.fetchSessions();
   }
 
   fetchSessions() {
     this.loading.set(true);
     const f = this.filters();
-    const params: Record<string, string> = { search: f.search, track: f.track, room: f.room, day: f.day };
+    const params: Record<string, string> = { q: f.q, speaker: f.speaker, track: f.track, room: f.room, day: f.day };
     this.api.sessions(this.conferenceId, params).subscribe({
       next: (data) => {
         this.sessions.set(data);

@@ -960,6 +960,16 @@ th {
   color: #9b641b
 }
 
+.status[data-status=CANCELLED] {
+  background: #fee2e2;
+  color: #991b1b
+}
+
+.status[data-status=COMPLETED] {
+  background: #dbeafe;
+  color: #1d4ed8
+}
+
 @media(max-width:900px) {
   .event-hero {
     grid-template-columns: 1fr

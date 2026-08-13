@@ -43,18 +43,9 @@ import { Conference } from '../../core/models/models';
               <input id="venue" [(ngModel)]="venue" name="venue" required placeholder="Venue name" />
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="capacity">Capacity</label>
-              <input id="capacity" type="number" [(ngModel)]="capacity" name="capacity" required min="1" placeholder="Max attendees" />
-            </div>
-            <div class="form-group">
-              <label for="status">Status</label>
-              <select id="status" [(ngModel)]="status" name="status" required>
-                <option value="DRAFT">Draft</option>
-                <option value="PUBLISHED">Published</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="capacity">Capacity</label>
+            <input id="capacity" type="number" [(ngModel)]="capacity" name="capacity" required min="1" placeholder="Max attendees" />
           </div>
           <footer>
             <button type="button" class="btn" (click)="close()">Cancel</button>
@@ -183,7 +174,6 @@ export class CreateConferenceDialog {
   city = '';
   venue = '';
   capacity = 100;
-  status: 'DRAFT' | 'PUBLISHED' = 'DRAFT';
 
   close() {
     this.closed.emit();
@@ -205,14 +195,13 @@ export class CreateConferenceDialog {
 
     this.loading.set(true);
     this.api.createConference({
-      title: this.title,
-      summary: this.summary,
+      title: this.title.trim(),
+      summary: this.summary.trim(),
       startsAt: new Date(this.startsAt).toISOString(),
       endsAt: new Date(this.endsAt).toISOString(),
-      city: this.city,
-      venue: this.venue,
-      capacity: this.capacity,
-      status: this.status,
+      city: this.city.trim(),
+      venue: this.venue.trim(),
+      capacity: Number(this.capacity),
     }).subscribe({
       next: (conference) => {
         this.loading.set(false);
