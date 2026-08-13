@@ -64,7 +64,7 @@ export class Register {
     this.loading.set(true);
     this.error.set('');
     this.a.register(this.form.value.name!, this.form.value.email!, this.form.value.password!).subscribe({
-      next: () => this.r.navigateByUrl('/dashboard'),
+      next: () => this.r.navigateByUrl('/verify-email'),
       error: (e) => {
         this.error.set(e.error?.message ?? 'Unable to create account');
         this.loading.set(false);

@@ -36,6 +36,8 @@ conferencesRouter.post("/", authorize("ADMIN", "ORGANIZER"), (req, res) => {
   }
 });
 conferencesRouter.post("/:id/register", authorize("ATTENDEE"), (req, res) => {
+  if (!store.isUserVerified(req.user!.id))
+    return res.status(403).json({ message: "Email verification required", code: "EMAIL_NOT_VERIFIED" });
   try {
     store.register(+req.params.id, req.user!.id);
     res.status(201).json(store.conference(+req.params.id, req.user!.id));

@@ -37,8 +37,37 @@ authRouter.post("/register", (req, res) => {
     role: "ATTENDEE",
   });
 
+  const verificationToken = store.createVerificationToken(user.id);
   const { passwordHash: _, ...safeUser } = user;
-  res.status(201).json({ ...tokens.issue(user), user: safeUser });
+  res.status(201).json({ ...tokens.issue(user), user: safeUser, verificationToken });
+});
+
+authRouter.post("/verify-email", (req, res) => {
+  const { token } = req.body;
+  if (!token || typeof token !== "string")
+    return res.status(400).json({ message: "Token is required", code: "INVALID_INPUT" });
+
+  const result = store.verifyEmail(token);
+  if (!result.success) {
+    const message =
+      result.error === "TOKEN_EXPIRED" ? "Verification token has expired" :
+      result.error === "TOKEN_ALREADY_USED" ? "Token has already been used" :
+      "Invalid verification token";
+    return res.status(400).json({ message, code: result.error });
+  }
+
+  res.json({ message: "Email verified successfully" });
+});
+
+authRouter.post("/resend-verification", authenticate, (req, res) => {
+  const user = store.findUserById(req.user!.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  if (user.isVerified)
+    return res.status(400).json({ message: "Email is already verified", code: "ALREADY_VERIFIED" });
+
+  store.invalidateVerificationTokens(user.id);
+  const verificationToken = store.createVerificationToken(user.id);
+  res.json({ message: "Verification email resent", verificationToken });
 });
 
 authRouter.post("/login", (req, res) => {

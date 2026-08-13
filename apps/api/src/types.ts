@@ -7,6 +7,7 @@ export type User = {
   role: Role;
   avatar: string;
   active: boolean;
+  isVerified: boolean;
 };
 export type ConferenceStatus = "DRAFT" | "PUBLISHED" | "SOLD_OUT" | "COMPLETED" | "CANCELLED";
 export type Conference = {

@@ -1,9 +1,10 @@
 import { Component, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService } from '../../core/services/api.service';
 import { ConferenceDetail as Model, Session } from '../../core/models/models';
 import { AuthService } from '../../core/auth/auth.service';
+import { ToastService } from '../../core/services/toast.service';
 @Component({
   imports: [RouterLink],
   template: `@if (conference(); as c) {
@@ -102,6 +103,8 @@ export class ProjectDetail {
   p = inject(ActivatedRoute);
   api = inject(ApiService);
   auth = inject(AuthService);
+  toast = inject(ToastService);
+  router = inject(Router);
   conference = signal<Model | null>(null);
   conflictError = signal<string>('');
   constructor() {
@@ -113,7 +116,17 @@ export class ProjectDetail {
       .subscribe((x) => this.conference.set(x));
   }
   register(id: number) {
-    this.api.register(id).subscribe((x) => this.conference.set(x));
+    this.api.register(id).subscribe({
+      next: (x) => this.conference.set(x),
+      error: (err: HttpErrorResponse) => {
+        if (err.status === 403 && err.error?.code === 'EMAIL_NOT_VERIFIED') {
+          this.toast.warning('⚠️ Please verify your email address before registering for conferences. Check your inbox or resend the verification link.');
+          setTimeout(() => this.router.navigateByUrl('/verify-email'), 3000);
+        } else {
+          this.toast.error(err.error?.message ?? 'Registration failed. Please try again.');
+        }
+      },
+    });
   }
   toggle(s: Session) {
     this.conflictError.set('');

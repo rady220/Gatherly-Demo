@@ -117,6 +117,128 @@ describe("US-1.1 — create attendee account", () => {
   });
 });
 
+/* ────────────────── US-1.2: Verify Email Address ────────────────── */
+describe("US-1.2 — verify email address", () => {
+  const registerUser = async (email?: string) => {
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({
+        name: "Verify Tester",
+        email: email ?? `verify-${Date.now()}@example.com`,
+        password: "SecurePass123!",
+      });
+    return res.body;
+  };
+
+  it("register returns a verificationToken", async () => {
+    const body = await registerUser();
+    expect(body.verificationToken).toBeDefined();
+    expect(typeof body.verificationToken).toBe("string");
+    expect(body.user.isVerified).toBe(false);
+  });
+
+  it("POST /api/auth/verify-email verifies the user", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: body.verificationToken });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe("Email verified successfully");
+  });
+
+  it("returns 400 for already-used token", async () => {
+    const body = await registerUser();
+    await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: body.verificationToken });
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: body.verificationToken });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("TOKEN_ALREADY_USED");
+  });
+
+  it("returns 400 for invalid token", async () => {
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "00000000-0000-0000-0000-000000000000" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("INVALID_TOKEN");
+  });
+
+  it("returns 400 when token is missing", async () => {
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("unverified user cannot register for a conference", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/conferences/1/register")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send();
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("EMAIL_NOT_VERIFIED");
+  });
+
+  it("verified user CAN register for a conference", async () => {
+    const body = await registerUser();
+    await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: body.verificationToken });
+    const res = await request(app)
+      .post("/api/conferences/1/register")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send();
+    expect(res.status).toBe(201);
+  });
+
+  it("POST /api/auth/resend-verification issues a new token", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send();
+    expect(res.status).toBe(200);
+    expect(res.body.verificationToken).toBeDefined();
+    expect(res.body.verificationToken).not.toBe(body.verificationToken);
+  });
+
+  it("resend-verification returns 400 if already verified", async () => {
+    const body = await registerUser();
+    await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: body.verificationToken });
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send();
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("ALREADY_VERIFIED");
+  });
+
+  it("old token is invalidated after resend", async () => {
+    const body = await registerUser();
+    const oldToken = body.verificationToken;
+    const resend = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send();
+    // Old token should no longer work
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: oldToken });
+    expect(res.status).toBe(400);
+    // New token should work
+    const res2 = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: resend.body.verificationToken });
+    expect(res2.status).toBe(200);
+  });
+});
+
 /* ────────────────── US-5.1: Room Conflict Detection ────────────────── */
 describe("US-5.1 — room conflict detection", () => {
   const validSession = (overrides: Record<string, unknown> = {}) => ({

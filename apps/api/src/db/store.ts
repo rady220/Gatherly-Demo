@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import type {
   Conference,
@@ -19,7 +20,8 @@ const path = process.env.DATABASE_PATH ?? "./data/gatherly.db";
 mkdirSync(dirname(path), { recursive: true });
 const db = new DatabaseSync(path);
 db.exec(`PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,avatar TEXT,active INTEGER);
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,avatar TEXT,active INTEGER,is_verified INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS verification_tokens(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),token TEXT UNIQUE,expires_at TEXT,used INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS conferences(id INTEGER PRIMARY KEY,title TEXT,slug TEXT UNIQUE,summary TEXT,venue TEXT,city TEXT,starts_at TEXT,ends_at TEXT,status TEXT DEFAULT 'DRAFT',capacity INTEGER,organizer_id INTEGER,theme TEXT);
 CREATE TABLE IF NOT EXISTS sessions(id INTEGER PRIMARY KEY,conference_id INTEGER REFERENCES conferences(id),title TEXT,abstract TEXT,track TEXT,room TEXT,starts_at TEXT,ends_at TEXT,capacity INTEGER,speaker_id INTEGER,status TEXT DEFAULT 'SCHEDULED');
 CREATE TABLE IF NOT EXISTS registrations(conference_id INTEGER,user_id INTEGER,status TEXT DEFAULT 'CONFIRMED',PRIMARY KEY(conference_id,user_id));
@@ -30,7 +32,7 @@ if (
     .count === 0
 ) {
   const add = db.prepare(
-      "INSERT INTO users(name,email,password_hash,role,avatar,active) VALUES(?,?,?,?,?,1)",
+      "INSERT INTO users(name,email,password_hash,role,avatar,active,is_verified) VALUES(?,?,?,?,?,1,1)",
     ),
     password = bcrypt.hashSync("Workshop123!", 10);
   [
@@ -141,6 +143,7 @@ const safe = (r: any): User => ({
   role: r.role as Role,
   avatar: r.avatar,
   active: !!r.active,
+  isVerified: !!r.is_verified,
 });
 const mapConference = (r: any): Conference => ({
   id: r.id,
@@ -337,9 +340,31 @@ export const store = {
   createUser(data: { name: string; email: string; passwordHash: string; role: Role }): User {
     const avatar = data.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
     const result = db.prepare(
-      "INSERT INTO users(name,email,password_hash,role,avatar,active) VALUES(?,?,?,?,?,1)"
+      "INSERT INTO users(name,email,password_hash,role,avatar,active,is_verified) VALUES(?,?,?,?,?,1,0)"
     ).run(data.name, data.email, data.passwordHash, data.role, avatar);
     return safe(db.prepare("SELECT * FROM users WHERE id=?").get(result.lastInsertRowid));
+  },
+  createVerificationToken(userId: number): string {
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    db.prepare("INSERT INTO verification_tokens(user_id,token,expires_at) VALUES(?,?,?)").run(userId, token, expiresAt);
+    return token;
+  },
+  verifyEmail(token: string): { success: boolean; error?: string } {
+    const row = db.prepare("SELECT * FROM verification_tokens WHERE token=?").get(token) as any;
+    if (!row) return { success: false, error: "INVALID_TOKEN" };
+    if (row.used) return { success: false, error: "TOKEN_ALREADY_USED" };
+    if (new Date(row.expires_at) < new Date()) return { success: false, error: "TOKEN_EXPIRED" };
+    db.prepare("UPDATE verification_tokens SET used=1 WHERE id=?").run(row.id);
+    db.prepare("UPDATE users SET is_verified=1 WHERE id=?").run(row.user_id);
+    return { success: true };
+  },
+  invalidateVerificationTokens(userId: number): void {
+    db.prepare("UPDATE verification_tokens SET used=1 WHERE user_id=? AND used=0").run(userId);
+  },
+  isUserVerified(userId: number): boolean {
+    const r = db.prepare("SELECT is_verified FROM users WHERE id=?").get(userId) as any;
+    return r ? !!r.is_verified : false;
   },
   createConference(data: { title: string; summary: string; startsAt: string; endsAt: string; city: string; venue: string; capacity: number; status: "DRAFT" | "PUBLISHED" }, organizerId: number): Conference {
     const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
