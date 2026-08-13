@@ -1,12 +1,13 @@
 import { Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { ConferenceDetail as Model, Room, Session, Track } from '../../core/models/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 @Component({
-  imports: [RouterLink],
+  imports: [RouterLink, FormsModule],
   template: `@if (conference(); as c) {
     <a class="back" routerLink="/conferences">← All conferences</a>
     <header class="event-hero" [style.--event-color]="c.theme">
@@ -422,11 +423,15 @@ export class ProjectDetail {
     });
   }
   submitSession() {
-    const payload = this.sessionDraft();
-    if (!payload.title.trim() || !payload.abstract.trim() || !payload.track.trim() || !payload.room.trim() || !payload.startsAt || !payload.endsAt) {
+    const draft = this.sessionDraft();
+    if (!draft.title.trim() || !draft.abstract.trim() || !draft.track.trim() || !draft.room.trim() || !draft.startsAt || !draft.endsAt) {
       this.sessionError.set('Please complete all session fields before saving.');
       return;
     }
+    // Ensure datetime-local values include seconds for ISO compliance
+    const startsAt = draft.startsAt.length === 16 ? draft.startsAt + ':00' : draft.startsAt;
+    const endsAt = draft.endsAt.length === 16 ? draft.endsAt + ':00' : draft.endsAt;
+    const payload = { ...draft, startsAt, endsAt };
     const request = this.editingSessionId() !== null
       ? this.api.updateSession(this.editingSessionId()!, payload)
       : this.api.createSession(this.p.snapshot.paramMap.get('id') ?? 0, payload);
