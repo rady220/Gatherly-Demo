@@ -47,6 +47,18 @@ export type WaitlistEntry = {
   createdAt: string;
   expiresAt: string | null;
 };
+export type Room = {
+  id: number;
+  conferenceId: number;
+  name: string;
+  capacity: number;
+};
+export type Track = {
+  id: number;
+  conferenceId: number;
+  name: string;
+  color: string;
+};
 export type ConferenceDetail = Conference & {
   sessions: Session[];
   registrations: number;
