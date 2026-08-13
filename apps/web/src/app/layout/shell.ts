@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
+import { isImageSrc, nameInitials } from '../core/utils/avatar';
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -17,7 +18,11 @@ import { AuthService } from '../core/auth/auth.service';
         }
       </nav>
       <div class="sidebar-user">
-        <span class="avatar">{{ auth.user()?.avatar }}</span>
+        @if (isImageSrc(auth.user()?.avatar)) {
+          <img class="avatar photo" [src]="auth.user()?.avatar" [alt]="auth.user()?.name" />
+        } @else {
+          <span class="avatar">{{ nameInitials(auth.user()?.name) }}</span>
+        }
         <div>
           <strong>{{ auth.user()?.name }}</strong
           ><small>{{ auth.user()?.role }}</small>
@@ -32,7 +37,11 @@ import { AuthService } from '../core/auth/auth.service';
           <span class="eyebrow">Your event workspace</span
           ><strong>{{ auth.user()?.name?.split(' ')?.[0] }}</strong>
         </div>
-        <a class="avatar" routerLink="/profile">{{ auth.user()?.avatar }}</a>
+        @if (isImageSrc(auth.user()?.avatar)) {
+          <img class="avatar photo" [src]="auth.user()?.avatar" [alt]="auth.user()?.name" />
+        } @else {
+          <a class="avatar" routerLink="/profile">{{ nameInitials(auth.user()?.name) }}</a>
+        }
       </header>
       <div class="page"><router-outlet /></div>
     </main>
@@ -41,4 +50,6 @@ import { AuthService } from '../core/auth/auth.service';
 export class Shell {
   auth = inject(AuthService);
   open = signal(false);
+  isImageSrc = isImageSrc;
+  nameInitials = nameInitials;
 }

@@ -111,6 +111,41 @@ authRouter.post("/refresh", (req, res) => {
 });
 authRouter.get("/me", authenticate, (req, res) => res.json(req.user));
 
+// US-1.4: Update profile
+const AVATAR_RE = /^(https?:\/\/[^\s]+|data:image\/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+)$/i;
+const updateProfileSchema = z.object({
+  name: z.string().min(1, "Name cannot be empty").optional(),
+  bio: z.string().max(500, "Bio must be 500 characters or less").nullable().optional(),
+  avatar: z
+    .string()
+    .max(3_000_000, "Avatar must be under 3MB")
+    .regex(AVATAR_RE, "Avatar must be a valid URL or base64 image")
+    .nullable()
+    .optional(),
+  organization: z.string().max(200, "Organization must be 200 characters or less").nullable().optional(),
+});
+
+authRouter.patch("/me", authenticate, (req, res) => {
+  // Reject attempts to change protected fields
+  const forbidden = ["role", "email", "password", "passwordHash", "id", "active", "isVerified"];
+  const attempted = Object.keys(req.body).filter(k => forbidden.includes(k));
+  if (attempted.length > 0)
+    return res.status(400).json({ message: `Cannot update protected fields: ${attempted.join(", ")}`, code: "FORBIDDEN_FIELDS" });
+
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success)
+    return res.status(400).json({
+      message: "Validation failed",
+      code: "VALIDATION_ERROR",
+      errors: parsed.error.issues.map(i => ({ field: i.path[0], message: i.message })),
+    });
+
+  const updated = store.updateProfile(req.user!.id, parsed.data);
+  if (!updated) return res.status(404).json({ message: "User not found", code: "NOT_FOUND" });
+  const { passwordHash, ...safe } = updated;
+  res.json(safe);
+});
+
 // US-1.3: Forgot password — always returns 200 (no email enumeration)
 authRouter.post("/forgot-password", (req, res) => {
   const { email } = req.body;

@@ -8,7 +8,7 @@ export const app = express();
 app.use(
   helmet(),
   cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:4200" }),
-  express.json({ limit: "100kb" }),
+  express.json({ limit: "5mb" }),
 );
 app.get("/api/health", (_, res) =>
   res.json({ status: "ok", service: "gatherly-api" }),

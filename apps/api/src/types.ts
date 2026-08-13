@@ -8,6 +8,8 @@ export type User = {
   avatar: string;
   active: boolean;
   isVerified: boolean;
+  bio: string | null;
+  organization: string | null;
 };
 export type ConferenceStatus = "DRAFT" | "PUBLISHED" | "SOLD_OUT" | "COMPLETED" | "CANCELLED";
 export type Conference = {

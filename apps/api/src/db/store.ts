@@ -20,7 +20,7 @@ const path = process.env.DATABASE_PATH ?? "./data/gatherly.db";
 mkdirSync(dirname(path), { recursive: true });
 const db = new DatabaseSync(path);
 db.exec(`PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,avatar TEXT,active INTEGER,is_verified INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,avatar TEXT,active INTEGER,is_verified INTEGER DEFAULT 0,bio TEXT,organization TEXT);
 CREATE TABLE IF NOT EXISTS verification_tokens(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),token TEXT UNIQUE,expires_at TEXT,used INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS password_reset_tokens(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),token TEXT UNIQUE,expires_at TEXT,used INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS conferences(id INTEGER PRIMARY KEY,title TEXT,slug TEXT UNIQUE,summary TEXT,venue TEXT,city TEXT,starts_at TEXT,ends_at TEXT,status TEXT DEFAULT 'DRAFT',capacity INTEGER,organizer_id INTEGER,theme TEXT);
@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS sessions(id INTEGER PRIMARY KEY,conference_id INTEGER
 CREATE TABLE IF NOT EXISTS registrations(conference_id INTEGER,user_id INTEGER,status TEXT DEFAULT 'CONFIRMED',PRIMARY KEY(conference_id,user_id));
 CREATE TABLE IF NOT EXISTS agenda(user_id INTEGER,session_id INTEGER,PRIMARY KEY(user_id,session_id));
 CREATE TABLE IF NOT EXISTS waitlist(id INTEGER PRIMARY KEY,conference_id INTEGER,user_id INTEGER,position INTEGER,status TEXT DEFAULT 'WAITING',created_at TEXT DEFAULT (datetime('now')),expires_at TEXT,UNIQUE(conference_id,user_id));`);
+const userCols = (db.prepare("PRAGMA table_info(users)").all() as any[]).map(c => c.name);
+if (!userCols.includes("bio")) db.exec("ALTER TABLE users ADD COLUMN bio TEXT");
+if (!userCols.includes("organization")) db.exec("ALTER TABLE users ADD COLUMN organization TEXT");
 if (
   (db.prepare("SELECT count(*) count FROM users").get() as { count: number })
     .count === 0
@@ -145,6 +148,8 @@ const safe = (r: any): User => ({
   avatar: r.avatar,
   active: !!r.active,
   isVerified: !!r.is_verified,
+  bio: r.bio ?? null,
+  organization: r.organization ?? null,
 });
 const mapConference = (r: any): Conference => ({
   id: r.id,
@@ -396,5 +401,17 @@ export const store = {
   },
   invalidatePasswordResetTokens(userId: number): void {
     db.prepare("UPDATE password_reset_tokens SET used=1 WHERE user_id=? AND used=0").run(userId);
+  },
+  updateProfile(userId: number, data: { name?: string; bio?: string | null; avatar?: string | null; organization?: string | null }): User | undefined {
+    const fields: string[] = [];
+    const params: any[] = [];
+    if (data.name !== undefined) { fields.push("name=?"); params.push(data.name); }
+    if (data.bio !== undefined) { fields.push("bio=?"); params.push(data.bio); }
+    if (data.avatar !== undefined) { fields.push("avatar=?"); params.push(data.avatar); }
+    if (data.organization !== undefined) { fields.push("organization=?"); params.push(data.organization); }
+    if (fields.length === 0) return store.findUserById(userId);
+    params.push(userId);
+    db.prepare(`UPDATE users SET ${fields.join(",")} WHERE id=?`).run(...params);
+    return store.findUserById(userId);
   },
 };

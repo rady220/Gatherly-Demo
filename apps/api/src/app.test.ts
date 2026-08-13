@@ -681,3 +681,155 @@ describe("US-1.3 — reset or change password", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ─── US-1.4 — Manage personal profile ───────────────────────────────────
+describe("US-1.4 — manage personal profile", () => {
+  let counter = 0;
+  const registerUser = async () => {
+    counter++;
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({ name: `ProfileUser ${counter}`, email: `profileuser${counter}@test.com`, password: "Workshop123!" });
+    return res.body;
+  };
+  it("GET /api/auth/me returns full profile with bio and organization", async () => {
+    const t = await login("attendee");
+    const res = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: expect.any(Number),
+      name: expect.any(String),
+      email: "attendee@gatherly.dev",
+      role: "ATTENDEE",
+      avatar: expect.any(String),
+      isVerified: expect.any(Boolean),
+    });
+    expect(res.body).toHaveProperty("bio");
+    expect(res.body).toHaveProperty("organization");
+    expect(res.body).not.toHaveProperty("passwordHash");
+    expect(res.body).not.toHaveProperty("password_hash");
+  });
+
+  it("GET /api/auth/me returns 401 for unauthenticated", async () => {
+    const res = await request(app).get("/api/auth/me");
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /api/auth/me updates name, bio, organization", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ name: "Updated Name", bio: "My bio text", organization: "Acme Corp" });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("Updated Name");
+    expect(res.body.bio).toBe("My bio text");
+    expect(res.body.organization).toBe("Acme Corp");
+  });
+
+  it("PATCH /api/auth/me updates avatar with valid URL", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ avatar: "https://example.com/photo.png" });
+    expect(res.status).toBe(200);
+    expect(res.body.avatar).toBe("https://example.com/photo.png");
+  });
+
+  it("PATCH /api/auth/me returns 400 for invalid avatar URL", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ avatar: "not-a-valid-url" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("PATCH /api/auth/me updates avatar with a base64 data URL", async () => {
+    const body = await registerUser();
+    const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ avatar: dataUrl });
+    expect(res.status).toBe(200);
+    expect(res.body.avatar).toBe(dataUrl);
+  });
+
+  it("PATCH /api/auth/me rejects an oversized base64 avatar", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ avatar: `data:image/png;base64,${"A".repeat(3_000_001)}` });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("PATCH /api/auth/me rejects protected fields (role, email, password)", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ role: "ADMIN", email: "hacker@evil.com" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("FORBIDDEN_FIELDS");
+  });
+
+  it("PATCH /api/auth/me returns full updated profile", async () => {
+    const body = await registerUser();
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ name: "New Name", bio: "Hello world" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: body.user.id,
+      name: "New Name",
+      bio: "Hello world",
+      email: body.user.email,
+      role: body.user.role,
+    });
+    expect(res.body).not.toHaveProperty("passwordHash");
+  });
+
+  it("PATCH /api/auth/me requires authentication", async () => {
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .send({ name: "Should Fail" });
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /api/auth/me allows setting bio to null (clearing)", async () => {
+    const body = await registerUser();
+    await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ bio: "Some bio" });
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${body.accessToken}`)
+      .send({ bio: null });
+    expect(res.status).toBe(200);
+    expect(res.body.bio).toBeNull();
+  });
+
+  it("only the authenticated user can edit their own profile", async () => {
+    const t = await login("attendee");
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${t}`)
+      .send({ name: "Attendee Updated" });
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe("attendee@gatherly.dev");
+    expect(res.body.name).toBe("Attendee Updated");
+
+    // Restore
+    await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${t}`)
+      .send({ name: "Nour Adel" });
+  });
+});
